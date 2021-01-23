@@ -50,47 +50,39 @@ def traverse_graph(G, item, traversals, cutoff=1, random_=False):
     return items
 
 
-def find_ingredient(ingredient, nodes):
+def find_ingredient(nodes, ingredient="Pear"):
     ''' Function that returns the closet match to an ingredient in the graph
     Args: ingredient: the ingredient you want to find -> str
           nodes: a list of the nodes in the graph -> list
     Returns: a list of the closest ingredients found
     '''
+    # Load the graph for the 'medium' segment
+    # _, G = load_graph(1)
+    # nodes = list(G.nodes)
     ingredients = []
+
+    # if not nodes:
     for node in nodes:
         if ingredient in node:
             ingredients.append(node)
+    # else:
+    #     ingredients.append("")
 
     return ingredients
 
 
-def load_graph(min_edges = 3):
+def load_graph(segment):
     ''' Function that creates the graph of the graph based on the min number of edges
-    Args: min_edges: only display nodes with this or more edges -> int
+    Args: segment: indicates which segment: 0, 1  to choose -> int
     Returns: graph and pos objects
     '''
     ### Load the data up
-    with open('pair_counts.pickle', 'rb') as f:
-        food_df = pickle.load(f)
+    segments = ['small_graph.pickle', 'med_graph.pickle']
 
-    # Create the graph
-    d = food_df.iloc[:10000, :].set_index('products').T.to_dict('records')
-    G = nx.Graph()
 
-    for key, val in d[0].items():
-        G.add_edge(key[0], key[1], weight = val)
+    with open(segments[segment], 'rb') as f:
+        G = pickle.load(f)
 
-    nodes = list(G.nodes)
-
-    # Prune the plot so we only have items that are matched with at least min_edges others
-    for node in nodes:
-        try:
-            if G.degree[node] < min_edges:
-                G.remove_node(node)
-        except:
-            print(f'error with node {node}')
-
-    nodes = list(G.nodes)
     pos = nx.spring_layout(G)
 
     return pos, G
@@ -127,7 +119,7 @@ def create_graph_display(G, pos):
         x=node_x, y=node_y,
         mode='markers+text',
         hoverinfo='text',
-        hovertext="12",
+        hovertext="10",
         text=nodes,
         marker=dict(
             showscale=True,
