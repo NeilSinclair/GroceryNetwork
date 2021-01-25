@@ -94,7 +94,7 @@ def display_shopping_list():
             ])
         ]),
         html.Div(className='row', children=[
-            html.Div(className='col', children=[
+            html.Div(className='six columns', children=[
                 html.Div(className='row', children=[
                     # Search box in here
                     html.H3("Search items"),
@@ -106,7 +106,7 @@ def display_shopping_list():
                         value='Search Shopping Items'
                     )
 
-                ], style={'display': 'inline-block'}
+                ]
                 ),
                 html.Div(className='row', children=[
                     html.P("Placeholder for search box"),
@@ -114,21 +114,20 @@ def display_shopping_list():
                         id='item_checklist',
                         options=list_dict,
                       )
-                ], style={'display': 'inline-block'})
-            ],
-            style={'width': '50%', 'display': 'inline-block'}
+                ]
+            )],
             ),
-            html.Div(className='col', children=[
+            html.Div(className='six columns', children=[
                 html.Div(className='row', children=[
                     # Search box in here
                     html.H3("Your Shopping List")
-                ], style={'display': 'inline-block'}),
+                ]), #, style={'display': 'inline-block'}),
                 html.Div(className='row', children=[
                     # Selectable search items go in here
                     html.P("Placeholder for shopping list")
-                ], style={'display': 'inline-block'})
-            ],
-             style={'width': '50%', 'display': 'inline-block'}
+                ]#, style={'display': 'inline-block'})
+                )],
+             # style={'width': '50%', 'display': 'inline-block'}
              )
 
         ])
