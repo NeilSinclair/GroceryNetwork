@@ -20,6 +20,7 @@ def traverse_graph(G, item, traversals, cutoff=1, random_=False):
     items.append(item)
     for _ in range(traversals):
         connections = nx.single_source_shortest_path_length(G, source=item, cutoff=cutoff)
+        # Delete the source item - i.e. the one where the search started
         del connections[item]
         neighbours = {}
         for conn in connections:
