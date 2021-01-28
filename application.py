@@ -1,30 +1,24 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-import dash_bootstrap_components as dbc
+
 from dash.dependencies import Input, Output, State, MATCH, ALL
 
 import re
-
-import plotly.offline as py
-import plotly.graph_objects as go
-
-import networkx as nx
-
-import pickle
-import collections
-import pandas as pd
 
 from utils import *
 
 ########### Initiate the app
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+# app = dash.Dash('Grocery Recommender')
+# for source in ["https://codepen.io/jeanmidevacc/pen/paxKzB.css","https://codepen.io/pixinema/pen/XZvJyX.css"]:
+#     app.css.append_css({"external_url": source})
 application = app.server
 app.title='Groceries on a graph'
 list_dict = [{}]
 ## Load an initial Graph ##
-with open('med_graph.pickle', 'rb') as f:
+with open('large_graph.pickle', 'rb') as f:
     G_init = pickle.load(f)
 nodes = list(G_init.nodes)
 
@@ -44,20 +38,47 @@ class ButtonInputs():
 
         return self.inputs
 
-BUTTONS = ButtonInputs(['btn-1'],['btn-2'])
 ########### Set up the layout
+
+tabs_styles = {
+    'height': '44px'
+}
+tab_style = {
+    'borderBottom': '1px solid #d6d6d6',
+    'padding': '6px',
+    'fontWeight': 'bold'
+}
+
+tab_selected_style = {
+    'borderTop': '0px solid #d6d6d6',
+    'borderBottom': '1px solid #d6d6d6',
+    'backgroundColor': '#1a1a1a',
+    'color': 'white',
+    'padding': '6px'
+}
 
 ## Layout comprises two tabs - one for viewing of the graph and the other for making a shopping list
 # Get the name of the tabs, and their associated id
 
 app.layout = html.Div([
-    html.H1('Grocery Graph Network'),
+    html.Div(className='row', children=[
+        html.H1(children='Grocery Graph Network')
+        ], style={'textAlign': 'center',
+                  'backgroundColor': '#1a1a1a',
+                  'color': 'white'}),
     html.Div([
-    ## Show the tabgs
-    dcc.Tabs(id='tabs-example', value='tab-2', children=[
-        dcc.Tab(label='Network Graph', value='tab-1'),
-        dcc.Tab(label='Shopping List Builder', value='tab-2'),
-        ]
+    ## Show the tags
+    dcc.Tabs(id='tabs-example', value='tab-1',
+             # parent_className='custom-tabs',
+             # className='custom-tabs-container',
+             children=[
+        dcc.Tab(label='Shopping List Builder', value='tab-1',
+                style=tab_style,
+                selected_style=tab_selected_style),
+        dcc.Tab(label='Explore Network Graph', value='tab-2',
+                style=tab_style,
+                selected_style=tab_selected_style)
+        ], style=tabs_styles
         )
     ]
     ),
@@ -67,9 +88,9 @@ app.layout = html.Div([
 @app.callback(Output('tabs-output', 'children'),
               Input('tabs-example', 'value'))
 def render_content(value):
-    if value == 'tab-1':
+    if value == 'tab-2':
         return display_network_graph()
-    elif value == 'tab-2':
+    elif value == 'tab-1':
         return display_shopping_list()
 
 
@@ -92,6 +113,7 @@ def display_network_graph():
                     html.Div(className='col',
                         children=[
                             html.H4("Select Segment"),
+                            html.P("Select either a segment, named according to basket size"),
                             dd_segment
                         ],
                         style={'width': '30%', 'display': 'inline-block'}
@@ -137,11 +159,13 @@ def display_shopping_list():
             ),
             html.Div(className='six columns', children=[
                 html.Div(className='row', children=[
-                    # Search box in here
-                    html.H3("Your Shopping List")
+                    html.Div(className='six columns', children=[html.H3("Your Shopping List")])
                 ]),
+                # Dyanamic shopping list is built here
                 html.Div(className='row', id='shopping-list-container', children=[]
-                    )],
+                    )
+                ],
+
              )
 
         ])
@@ -159,6 +183,8 @@ def display_shopping_list():
 )
 def display_search_buttons(item, vals, buttons, shopping_list_items, explainer_text):
     ctx = dash.callback_context
+    # Make the text in the same format as the itmes
+    item = item.title()
     shopping_items = find_ingredient(nodes, item)
     print(f'ctx.triggered[0]["value"] is None: {ctx.triggered[0]["value"] is None}')
     buttons = []
@@ -172,22 +198,25 @@ def display_search_buttons(item, vals, buttons, shopping_list_items, explainer_t
         )
         buttons.append(new_button)
         explainer_text = r"""The items below are the closest that match your search"""
+
     # Check the button was clicked at least once
     if ctx.triggered and ctx.triggered[0]['value'] != 0 and ctx.triggered[0]['prop_id'] != 'item_search.value':
         # Get the name of the grocery item
         button_clicked = re.findall(r':"(.*?)"', ctx.triggered[0]['prop_id'])[0]
+        # Add it to the shopping list
         new_item = html.P(
             f'{button_clicked}'
         )
         shopping_list_items.append(new_item)
+
         # Erase the list of ingredients and present similar ingredients by searching the graph
         buttons = []
-        recommendations = traverse_graph(G_init, button_clicked, 5, cutoff=1, random_=False)
+        recommendations = traverse_graph(G_init, button_clicked, 15, cutoff=1, random_=True)
         # Update the explainer so the user knows what's going on
         explainer_text = r"""You're now being shown similar items to what you just added. If you'd like to search for  
                          something specific, use the search bar again"""
-
-        for i, it in enumerate(recommendations):
+        # Add the recommended items to the buttons for adding to the shopping list
+        for i, it in enumerate(recommendations[1:]):
             new_button = html.Button(
                 f'{it}',
                 id={'type': 'button',

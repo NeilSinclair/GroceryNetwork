@@ -1,8 +1,8 @@
 import random
 import networkx as nx
 import pickle
+import numpy as np
 
-import plotly.offline as py
 import plotly.graph_objects as go
 
 # Traverse the graph by selecting the most weighted item
@@ -17,7 +17,9 @@ def traverse_graph(G, item, traversals, cutoff=1, random_=False):
     Returns: a list of connected ingredients
     '''
     items = []
-    items.append(item)
+    # Do some processing so we can definitely find the word
+    item = item.title()
+    # items.append(item)
     for _ in range(traversals):
         connections = nx.single_source_shortest_path_length(G, source=item, cutoff=cutoff)
         # Delete the source item - i.e. the one where the search started
@@ -25,11 +27,15 @@ def traverse_graph(G, item, traversals, cutoff=1, random_=False):
         neighbours = {}
         for conn in connections:
             neighbours[conn] = G.get_edge_data(item, conn)['weight']
+        # Get the total weights between all neighbours to turn the weights into probabilities
+        total_weights = sum(neighbours.values())
 
-        weighted_neighbours = {k: v for k, v in sorted(neighbours.items(), key=lambda item: item[1], reverse=True)}
-
+        weighted_neighbours = {k: v/total_weights for k, v in sorted(neighbours.items(),
+                                                                     key=lambda item: item[1], reverse=True)}
+        # print(f"weighted_neighbours: {weighted_neighbours.keys()}")
         if random_:
-            new_item = random.sample(set(weighted_neighbours.keys()), 1)[0]
+            # new_item = random.sample(set(weighted_neighbours.keys()), 1)[0]
+            new_item = np.random.choice(list(weighted_neighbours.keys()), p=list(weighted_neighbours.values()))
         else:
             new_item = list(weighted_neighbours.keys())[0]
 
@@ -37,15 +43,17 @@ def traverse_graph(G, item, traversals, cutoff=1, random_=False):
 
         while new_item in items:
             if random_:
-                new_item = random.sample(set(weighted_neighbours.keys()), 1)[0]
+                # new_item = random.sample(set(weighted_neighbours.keys()), 1)[0]
+                new_item = np.random.choice(list(weighted_neighbours.keys()), p=list(weighted_neighbours.values()))
             else:
                 new_item = list(weighted_neighbours.keys())[i]
             i += 1
 
             if i > 20:
                 break
-
+        # We use this to hop around the point in the network
         item = new_item
+        
         items.append(item)
 
     return items
@@ -66,8 +74,6 @@ def find_ingredient(nodes, ingredient="Pear"):
     for node in nodes:
         if ingredient in node:
             ingredients.append(node)
-    # else:
-    #     ingredients.append("")
 
     return ingredients
 
@@ -78,7 +84,7 @@ def load_graph(segment):
     Returns: graph and pos objects
     '''
     ### Load the data up
-    segments = ['small_graph.pickle', 'med_graph.pickle']
+    segments = ['small_graph_v2.pickle', 'med_graph_v2.pickle']
 
 
     with open(segments[segment], 'rb') as f:
@@ -122,19 +128,23 @@ def create_graph_display(G, pos):
         hoverinfo='text',
         hovertext="10",
         text=nodes,
+        textfont=dict(
+            family="sans serif",
+            size=11
+        ),
         marker=dict(
             showscale=True,
             colorscale='YlGnBu',
             reversescale=False,
             color=[],
-            size=10,
+            size=8,
             colorbar=dict(
                 thickness=10,
                 title='Node Connections',
                 xanchor='left',
                 titleside='right'
             ),
-            line_width=2))
+            line_width=1))
 
     node_adjacencies = []
     node_text = []
