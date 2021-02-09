@@ -60,12 +60,12 @@ app.layout = html.Div([
     ## Show the tabs
     dcc.Tabs(id='tabs-example', value='tab-1',
              children=[
-        dcc.Tab(label='Shopping List Builder', value='tab-1',
+        dcc.Tab(label='Explore Network Graph', value='tab-1',
                 style=tab_style,
                 selected_style=tab_selected_style),
-        dcc.Tab(label='Explore Network Graph', value='tab-2',
-                style=tab_style,
-                selected_style=tab_selected_style)
+         dcc.Tab(label='Shopping List Builder', value='tab-2',
+                 style=tab_style,
+                 selected_style=tab_selected_style)
         ], style=tabs_styles
         )
     ]
@@ -77,9 +77,9 @@ app.layout = html.Div([
 @app.callback(Output('tabs-output', 'children'),
               Input('tabs-example', 'value'))
 def render_content(value):
-    if value == 'tab-2':
+    if value == 'tab-1':
         return display_network_graph()
-    elif value == 'tab-1':
+    elif value == 'tab-2':
         return display_shopping_list()
 
 
@@ -206,6 +206,7 @@ def display_search_buttons(item, vals, sim_val, buttons, shopping_list_items, ex
         shopping_items = find_ingredient(nodes, item)
         # Sort the items by length to make the display look nicer
         shopping_items.sort(key=len)
+        counter = 0
         for i, it in enumerate(shopping_items):
             new_button = html.Button(
                 f'{it}',
@@ -215,7 +216,11 @@ def display_search_buttons(item, vals, sim_val, buttons, shopping_list_items, ex
                 n_clicks=0,
                 style=button_style
             )
+            counter += 1
             buttons.append(new_button)
+            # Stop too many items from being added
+            if counter > 20:
+                break
             explainer_text = r"""The items below are the closest that match your search"""
 
     # Check a button was clicked & that it's at least the first click (no auto clicks when the page loads)
