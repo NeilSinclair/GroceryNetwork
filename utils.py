@@ -4,57 +4,34 @@ import pickle
 import numpy as np
 
 import plotly.graph_objects as go
+import gensim
+
+### Load the embedder object; note this is presaved/pre-computed
+with open('embedder_weighted.pickle', 'rb') as f:
+    embedder = pickle.load(f)
+
+def similar_embeddings(source_node, topn):
+    ''' Function that returns the top ncounts most similar items using embeddings'''
+    most_similar = embedder.wv.most_similar(source_node, topn=topn)
+    return [i[0] for i in most_similar]
 
 # Traverse the graph by selecting the most weighted item
-def traverse_graph(G, item, traversals, cutoff=1, random_=False):
-    ''' Function that finds items in the graph 'cutoff' length away
+def get_neighbours(G, item, topn=10):
+    ''' Function that returns the neighbours of a node
     Args: G - the netwowrkx Graph object
           item: the start node for searching -> str
-          traversals: how many results to return -> int
-          cutoff - depth of neighbourhood to search -> int
-          random_ - indicates whether to jump to a neighbour at random (True) or to choose the one
-                    with the greatest weight (False) -> bool
-    Returns: a list of connected ingredients
+          topn: number of neighbours to return -> int
+    Returns: a list of grocery items occuring in a basket together
     '''
-    items = []
-    # Do some processing so we can definitely find the word
-    item = item.title()
-    # items.append(item)
-    for _ in range(traversals):
-        connections = nx.single_source_shortest_path_length(G, source=item, cutoff=cutoff)
-        # Delete the source item - i.e. the one where the search started
-        del connections[item]
-        neighbours = {}
-        for conn in connections:
-            neighbours[conn] = G.get_edge_data(item, conn)['weight']
-        # Get the total weights between all neighbours to turn the weights into probabilities
-        total_weights = sum(neighbours.values())
 
-        weighted_neighbours = {k: v/total_weights for k, v in sorted(neighbours.items(),
-                                                                     key=lambda item: item[1], reverse=True)}
-        # print(f"weighted_neighbours: {weighted_neighbours.keys()}")
-        if random_:
-            # new_item = random.sample(set(weighted_neighbours.keys()), 1)[0]
-            new_item = np.random.choice(list(weighted_neighbours.keys()), p=list(weighted_neighbours.values()))
-        else:
-            new_item = list(weighted_neighbours.keys())[0]
-
-        i = 1
-
-        while new_item in items:
-            if random_:
-                # new_item = random.sample(set(weighted_neighbours.keys()), 1)[0]
-                new_item = np.random.choice(list(weighted_neighbours.keys()), p=list(weighted_neighbours.values()))
-            else:
-                new_item = list(weighted_neighbours.keys())[i]
-            i += 1
-
-            if i > 20:
-                break
-        # We use this to hop around the point in the network
-        item = new_item
-        
-        items.append(item)
+    # items = list(G.neighbors(item))
+    weights = {}
+    # Get all the neighbours of a node and sort them by their edge weight
+    for nodes in list(G.edges(str(item))):
+        weights[nodes[1]] = G.get_edge_data(nodes[0], nodes[1])['weight']
+    weights_sorted = {k: v for k, v in sorted(weights.items(), key=lambda x: x[1], reverse=True)}
+    # Filter so we just have the topn items
+    items = list(weights_sorted.keys())[0:topn]
 
     return items
 
@@ -65,13 +42,11 @@ def find_ingredient(nodes, ingredient="Pear"):
           nodes: a list of the nodes in the graph -> list
     Returns: a list of the closest ingredients found
     '''
-    # Load the graph for the 'medium' segment
-    # _, G = load_graph(1)
-    # nodes = list(G.nodes)
     ingredients = []
 
-    # if not nodes:
     for node in nodes:
+        # This does a string-like search for the ingredient/item in each node
+        # So ingredient="Pear" can return "Pear Jam", "Potato and Pear Soup" etc.
         if ingredient in node:
             ingredients.append(node)
 
@@ -86,7 +61,6 @@ def load_graph(segment):
     ### Load the data up
     segments = ['small_graph_v2.pickle', 'med_graph_v2.pickle']
 
-
     with open(segments[segment], 'rb') as f:
         G = pickle.load(f)
 
@@ -95,6 +69,11 @@ def load_graph(segment):
     return pos, G
 
 def create_graph_display(G, pos):
+    ''' Function for displaying the graph; most of this code is taken
+        from the Plotly site
+    Args:   G - networkx graph object
+            pos - positions of nodes
+    '''
     nodes = [node for node in G.nodes()]
 
     edge_x = []
@@ -127,7 +106,7 @@ def create_graph_display(G, pos):
         mode='markers+text',
         hoverinfo='text',
         hovertext="10",
-        text=nodes,
+        text="",
         textfont=dict(
             family="sans serif",
             size=11
@@ -146,6 +125,7 @@ def create_graph_display(G, pos):
             ),
             line_width=1))
 
+    # Update the text displayed on mouse over
     node_adjacencies = []
     node_text = []
     for node, adjacencies in enumerate(G.adjacency()):

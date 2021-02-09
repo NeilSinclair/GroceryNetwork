@@ -2,7 +2,7 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 
-from dash.dependencies import Input, Output, State, MATCH, ALL
+from dash.dependencies import Input, Output, State, ALL
 
 import re
 
@@ -11,9 +11,7 @@ from utils import *
 ########### Initiate the app
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-# app = dash.Dash('Grocery Recommender')
-# for source in ["https://codepen.io/jeanmidevacc/pen/paxKzB.css","https://codepen.io/pixinema/pen/XZvJyX.css"]:
-#     app.css.append_css({"external_url": source})
+
 application = app.server
 app.title='Groceries on a graph'
 list_dict = [{}]
@@ -22,21 +20,13 @@ with open('large_graph.pickle', 'rb') as f:
     G_init = pickle.load(f)
 nodes = list(G_init.nodes)
 
-## Create an empty set of buttons
+## Create a global button tracker
+BUTTON_CLICKED = None
 
-
-class ButtonInputs():
-    def __init__(self, names, ids):
-        self.names = names
-        self.ids = ids
-        self.inputs = list()
-
-    def get_inputs(self):
-        # for name, id in zip(self.names, self.ids):
-        for id in self.ids:
-            self.inputs.append(Input(id, 'n_clicks'))
-
-        return self.inputs
+button_style = {'margin-right': '5px',
+               'margin-left': '5px',
+               'margin-top': '5px',
+               'margin-bottom': '5px'}
 
 ########### Set up the layout
 
@@ -67,10 +57,8 @@ app.layout = html.Div([
                   'backgroundColor': '#1a1a1a',
                   'color': 'white'}),
     html.Div([
-    ## Show the tags
+    ## Show the tabs
     dcc.Tabs(id='tabs-example', value='tab-1',
-             # parent_className='custom-tabs',
-             # className='custom-tabs-container',
              children=[
         dcc.Tab(label='Shopping List Builder', value='tab-1',
                 style=tab_style,
@@ -85,6 +73,7 @@ app.layout = html.Div([
     html.Div(id='tabs-output')
 ])
 
+# Callback for selecting/changing tabs
 @app.callback(Output('tabs-output', 'children'),
               Input('tabs-example', 'value'))
 def render_content(value):
@@ -95,11 +84,11 @@ def render_content(value):
 
 
 
-
+# Code for displaying the network graph
 def display_network_graph():
     ''' Function that displays the network tab'''
 
-    # Setup a div for the inputs to the graph
+    # Setup a dropdown menu for the inputs to the graph
     dd_segment = dcc.Dropdown(
         id='dd_segment',
         className='dropdown',
@@ -107,32 +96,38 @@ def display_network_graph():
                  {'label': 'Medium', 'value': 1}],
         value=0
     )
-
+    # Create a div for the input settings, which includes the dropdown declared above
     input_settings = html.Div([
         html.Div(className='row', children=[
                     html.Div(className='col',
                         children=[
                             html.H4("Select Segment"),
-                            html.P("Select either a segment, named according to basket size"),
+                            html.P("Select a segment, named according to basket size"),
                             dd_segment
                         ],
                         style={'width': '30%', 'display': 'inline-block'}
                     )
             ]),
+         # Display the main graph, with loading icon whilst loading
          html.Div(className='row', children=[
                     html.Div(children=[
-                        dcc.Graph(id='graph-graphic')
+                        dcc.Loading(id='loading-icon',
+                                    children=[
+                                        dcc.Graph(id='graph-graphic')
+                                    ])
                     ])
                   ])
     ])
 
     return input_settings
 
+# Code for displaying the items on the shopping recommender/list tab
 def display_shopping_list():
     return html.Div([
         html.Div(className='row', children=[
             html.Div(className='col', children=[
-                html.P("Here is some text explaining what happens here")
+                html.P("Description: Search for items to start building your shopping list. \
+                Once you've selected an item, similar items will be recommended to you")
             ])
         ]),
         html.Div(className='row', children=[
@@ -145,14 +140,26 @@ def display_shopping_list():
                         type='search',
                         placeholder='Search Shopping Items',
                         debounce=True,
-                        value='Apples'
+                        value='Pears'
                     ),
                     html.P(""),
+                    # Radio items to choose how
+                    html.P("Method for making recommendations: "),
+                    dcc.RadioItems(id='sim-radio',
+                                   options=[{'label': 'Similar', 'value': 'similar'},
+                                            {'label': 'Neighbours', 'value': 'neighbours'}],
+                                   value='similar',
+                                   labelStyle={'display': 'inline-block'}),
+
+                    html.P(""),
                     html.P(id='explainer',
-                           children=["The items below are the closest that match your search"]),
+                           children=["The items below are the closest that match your search"],
+                           style={'font-weight': 'bold'}),
                     html.P("")
                 ]
                 ),
+                 # Container that loads the items closest to what you searched for or
+                 # recommended items
                  html.Div(className='row', id='button-container', children=[]
 
             )],
@@ -176,33 +183,53 @@ def display_shopping_list():
     Output('shopping-list-container', 'children'),
     Output('explainer', 'children'),
     [Input('item_search', 'value'),
-    Input({'type': 'button', 'index': ALL}, 'n_clicks')],
+    Input({'type': 'button', 'index': ALL}, 'n_clicks'),
+    Input('sim-radio', 'value')],
     [State('button-container', 'children'),
     State('shopping-list-container', 'children'),
     State('explainer', 'children')]
 )
-def display_search_buttons(item, vals, buttons, shopping_list_items, explainer_text):
+def display_search_buttons(item, vals, sim_val, buttons, shopping_list_items, explainer_text):
+    ''' Function that runs all of the updates on for the shopping list'''
     ctx = dash.callback_context
-    # Make the text in the same format as the itmes
+    # Make the text in the same format as the times
     item = item.title()
-    shopping_items = find_ingredient(nodes, item)
-    print(f'ctx.triggered[0]["value"] is None: {ctx.triggered[0]["value"] is None}')
-    buttons = []
-    for i, it in enumerate(shopping_items):
-        new_button = html.Button(
-            f'{it}',
-            id={'type': 'button',
-                'index': it
-            },
-            n_clicks=0
-        )
-        buttons.append(new_button)
-        explainer_text = r"""The items below are the closest that match your search"""
 
-    # Check the button was clicked at least once
-    if ctx.triggered and ctx.triggered[0]['value'] != 0 and ctx.triggered[0]['prop_id'] != 'item_search.value':
+    # If something has been triggered and it's the page loading or it's an item searched for
+    # then load the items as per what was searched for
+    if ctx.triggered is not None and \
+            ctx.triggered[0]['prop_id'] == '.' or \
+            ctx.triggered[0]['prop_id'] == 'item_search.value':
+        buttons = []
+        # Search for shopping items based on the item typed in the search bar
+        # and create buttons
+        shopping_items = find_ingredient(nodes, item)
+        # Sort the items by length to make the display look nicer
+        shopping_items.sort(key=len)
+        for i, it in enumerate(shopping_items):
+            new_button = html.Button(
+                f'{it}',
+                id={'type': 'button',
+                    'index': it
+                },
+                n_clicks=0,
+                style=button_style
+            )
+            buttons.append(new_button)
+            explainer_text = r"""The items below are the closest that match your search"""
+
+    # Check a button was clicked & that it's at least the first click (no auto clicks when the page loads)
+    # & it's not the search input being searched in and it's not the radio button being checked
+    elif ctx.triggered and ctx.triggered[0]['value'] != 0 and \
+            ctx.triggered[0]['value'] is not None and \
+            ctx.triggered[0]['prop_id'] != 'item_search.value' and \
+            ctx.triggered[0]['prop_id'] != 'sim-radio.value':
+
         # Get the name of the grocery item
         button_clicked = re.findall(r':"(.*?)"', ctx.triggered[0]['prop_id'])[0]
+        # track the button clicked for the next elif
+        global BUTTON_CLICKED
+        BUTTON_CLICKED = button_clicked
         # Add it to the shopping list
         new_item = html.P(
             f'{button_clicked}'
@@ -210,37 +237,69 @@ def display_search_buttons(item, vals, buttons, shopping_list_items, explainer_t
         shopping_list_items.append(new_item)
 
         # Erase the list of ingredients and present similar ingredients by searching the graph
-        buttons = []
-        recommendations = traverse_graph(G_init, button_clicked, 15, cutoff=1, random_=True)
-        # Update the explainer so the user knows what's going on
-        explainer_text = r"""You're now being shown similar items to what you just added. If you'd like to search for  
-                         something specific, use the search bar again"""
-        # Add the recommended items to the buttons for adding to the shopping list
-        for i, it in enumerate(recommendations[1:]):
-            new_button = html.Button(
-                f'{it}',
-                id={'type': 'button',
-                    'index': it
-                    },
-                n_clicks=0
-            )
-            buttons.append(new_button)
+        buttons, explainer_text = recommend_groceries(button_clicked, sim_val)
+
+    # Check if someone does something and if that something is changing the value on the
+    # similarity measure radio button and
+    elif ctx.triggered is not None and \
+            BUTTON_CLICKED is not None and \
+            ctx.triggered[0]['prop_id'] == 'sim-radio.value':
+        buttons, explainer_text = recommend_groceries(BUTTON_CLICKED, sim_val)
 
     return buttons, shopping_list_items, explainer_text
 
+def recommend_groceries(button_clicked, sim_val):
+    ''' Function that returns a list of recommended groceries
+    Args:  button_clicked - the button (item) clicked by the user
+            sim_val - the type of similarity the user wants for recommendations
+                    either 'similar' or 'neighbours'
+    Returns: a list of recommended items for the user
+    '''
+    buttons = []
+    # Get recommendations based on the similarity method chosen by the user
+    if sim_val == "similar":
+        recommendations = similar_embeddings(button_clicked, 10)
+    else:
+        recommendations = get_neighbours(G_init, button_clicked)
+    # Update the explainer so the user knows what's going on
+    explainer_text = r"""These items are recommended based on the last item added to your basket"""
+
+    # Stop a system-hanging number of recommendations being added
+    if len(recommendations) > 20:
+        recommendations = recommendations[:20]
+    # Sort the recommendations based on how many words each comprises; this makes the display
+    # look nicer
+    recommendations.sort(key=len)
+    # Add the recommended items to the buttons for adding to the shopping list
+    for i, it in enumerate(recommendations):
+        new_button = html.Button(
+            f'{it}',
+            id={'type': 'button',
+                'index': it
+                },
+            n_clicks=0,
+            style=button_style
+        )
+        buttons.append(new_button)
+    return buttons, explainer_text
 
 
-
+# Callback for updating the graph network display when the user changes the segment size that
+# they're looking at
 @app.callback(
     Output('graph-graphic', 'figure'),
     [Input('dd_segment', 'value')]
 )
 def update_graph(segment):
-
+    ''' Function to load a pre-computed graph network based on the segment selected by
+        the user in the dropdown
+    Args:   segment - the segment selected by the user in the dropdown
+    '''
+    # Load the graph data and create the nodes and elements needed for display
     pos, G = load_graph(segment=segment)
 
     node_trace, edge_trace = create_graph_display(G, pos)
-
+    # Display the graph
     fig = go.Figure(data=[edge_trace, node_trace],
                     layout=go.Layout(
                         title='',
@@ -256,7 +315,7 @@ def update_graph(segment):
                         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
                     )
-    nodes = G.nodes
+
     return fig
 
 ########### Run the app

@@ -1,0 +1,12 @@
+numpy
+pandas
+plotly
+networkx
+matplotlib
+seaborn
+tqdm
+dash
+dash-renderer
+dash-html-components
+dash-core-components
+gensim
